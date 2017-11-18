@@ -3,14 +3,14 @@
  * Author: RM Schaub
  *
  * Created on January 15, 2016, 7:44 PM
- *                   16F684
+ *                   PIC16F684
  *                    _______
  *           VDD ---|1      14|--- VSS
  *   Xtal pin 1  ---|2      13|---
  *   Xtal pin 2  ---|3      12|---
- *               ---|4      11|--- "speed" put
+ *               ---|4      11|---
  *       PWM out ---|5      10|---
- *               ---|6       9|--- 
+ *               ---|6       9|--- "speed" pot
  * wave choice 1 ---|7_______8|--- "on" light
  * 
  * This program produces a PWM'd sine wave from the "PWM out" pin at a frequency
@@ -103,7 +103,7 @@ void ADC_Init(void){
     
     ADCON0bits.ADFM = 0;        //ADC Left justified
     ADCON0bits.VCFG = 0;        //ADC reference is set to VDD
-    ADCON0bits.CHS = 0b010;     //selecting the AN2 analog channel
+    ADCON0bits.CHS = 0b101;     //selecting the AN5 analog channel
     ADCON1bits.ADCS = 0b100;    //ADC clock set to FOSC/4
 
     ADCON0bits.ADON = 1;        //turn ADC on
@@ -200,17 +200,17 @@ void set_sq_pwm_output(void){
 
 void main(void) {
     // IO CONFIG
-    TRISAbits.TRISA2 = 1;       //set RA2 (pin 11) as input
-    ANSEL = 0b00000100;         //set AN2 (pin 11) as analog input (others as digital I/O)
-    TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as a digital input
+    TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as input
+    ANSEL = 0b00100000;         //set AN5 (pin 9) as analog input (others as digital I/O)
+    //TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as a digital input
     TRISCbits.TRISC2 = 0;       //set RC2 (pin 8) as a digital output
     TRISCbits.TRISC3 = 1;       //set RC3 (pin 7) as a digital input
     TRISCbits.TRISC4 = 1;       //set RC4 (pin 6) as a digital input
     TRISCbits.TRISC5 = 0;       //set RC5 (pin 5) as a digital output (for pwm))
 
-    Timer0_init();
-    ADC_Init();
-    PWM_Init();
+    Timer0_init();              //timer0 used to periodically check the digital inputs
+    ADC_Init();                 //adc used to read the state of the "speed" pot
+    PWM_Init();                 //pwm used to create the LFO
     PORTCbits.RC2 = 1;          //just to tell the user that the program started
     
     while(1){
@@ -224,7 +224,7 @@ void interrupt ISR(void){
     // check for Timer 0 overflow interrupt
     if(INTCONbits.T0IF == 1){
 
-        // state of pin 7 controls which output wave is drawn
+        // state of pin 6 and 7 controls which output wave is drawn
         if ((PORTCbits.RC3 == 0) && (PORTCbits.RC4 == 0)){
             set_tri_pwm_output();
         }
