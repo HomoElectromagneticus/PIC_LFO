@@ -10,7 +10,7 @@
  *   Xtal pin 2  ---|3      12|---
  *               ---|4      11|---
  *       PWM out ---|5      10|---
- *               ---|6       9|--- "speed" pot
+ * wave choice 2 ---|6       9|--- "speed" pot
  * wave choice 1 ---|7_______8|--- "on" light
  * 
  * This program produces a PWM'd sine wave from the "PWM out" pin at a frequency
@@ -18,26 +18,30 @@
  * 11. The speed is controllable between ~0.3Hz and ~38Hz (512 total steps)
  */
 
-#include <stdio.h>
+//#include <stdio.h>
 #include <stdlib.h>
 #include <xc.h>
 
 // CONFIG 1
-#pragma config FOSC = HS        // Oscillator Selection bits (HS oscillator: High-speed crystal/resonator on RA4/OSC2/CLKOUT and RA5/OSC1/CLKIN)
-#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
-#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
-#pragma config MCLRE = OFF      // MCLR Pin Function Select (MCLR/VPP pin function is digital input)
-#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
-#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
-#pragma config BOREN = OFF      // Brown-out Reset Enable (Brown-out Reset disabled)
-#pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled)
-#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
+#pragma config FOSC = HS        //Oscillator Selection bits (HS oscillator: High-speed crystal/resonator on RA4/OSC2/CLKOUT and RA5/OSC1/CLKIN)
+#pragma config WDTE = ON        //Watchdog Timer Enable (WDT disabled)
+#pragma config PWRTE = ON       //Power-up Timer Enable (PWRT enabled)
+#pragma config MCLRE = ON       //MCLR Pin Function Select (MCLR/VPP pin function is a reset input)
+#pragma config CP = OFF         //Flash Program Memory Code Protection (Program memory code protection is disabled)
+#pragma config CPD = OFF        //Data Memory Code Protection (Data memory code protection is disabled)
+#pragma config BOREN = ON       //Brown-out Reset Enable (Brown-out Reset enabbled)
+#pragma config IESO = OFF       //Internal/External Switchover (Internal/External Switchover mode is disabled)
+#pragma config FCMEN = OFF      //Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
 
 // CONFIG 2
-#define _XTAL_FREQ 20000000     // setting processor speed variable (20MHz)
+#define _XTAL_FREQ 20000000     //setting processor speed variable (20MHz)
+#define WDTPS0 1                //set the Watchdog Timer to reset the PIC after 
+#define WDTPS1 0                //529ms (31KHz / 16384)
+#define WDTPS2 0
+#define WDTPS3 1
 
 // global variables
-int post_scale = 0;             // this is used to get the timer2 interrupt speed down
+int post_scale = 0;             //this is used to get the timer2 interrupt speed down
 const unsigned short sine_LUT[257] = {
     508,520,533,545,558,570,583,595,607,619,631,643,655,667,679,691,
     702,714,725,736,747,758,769,780,790,801,811,821,830,840,849,858,
@@ -56,31 +60,31 @@ const unsigned short sine_LUT[257] = {
     149,158,167,176,186,195,205,215,226,236,247,258,269,280,291,302,
     314,325,337,349,361,373,385,397,409,421,433,446,458,471,483,496,500
 };
-int table_index = 0;            // used to get into the LUT
-int interpolation_bits = 0;     // used to decide how much interpolation to do
-int phase_accum = 0;            // phase accumulator for "analog" output.
-                                // bottom three bits are used for interpolation
-                                // on the wavetable(s))
-unsigned int duty_cycle = 0;    // setting for the PWM output duty cycle
-int speed = 1;                  // "speed" of wavetable scanning
-int interpolated = 0;           // first-order interpolation for sine LUT
-int interpolation_rise = 0;     // difference in wavetable index values: used
-                                // for interpolation
-int tri_direction = 1;          // direction control bit for the triangle wave
-int adc_result;                 // this is where the ADC value will be stored
+int table_index = 0;            //used to get into the LUT
+int interpolation_bits = 0;     //used to decide how much interpolation to do
+int phase_accum = 0;            //phase accumulator for "analog" output.
+                                //bottom three bits are used for interpolation
+                                //on the wavetable(s))
+unsigned int duty_cycle = 0;    //setting for the PWM output duty cycle
+int speed = 1;                  //"speed" of wavetable scanning
+int interpolated = 0;           //first-order interpolation for sine LUT
+int interpolation_rise = 0;     //difference in wavetable index values: used
+                                //for interpolation
+int tri_direction = 1;          //direction control bit for the triangle wave
+int adc_result;                 //this is where the ADC value will be stored
 
 void Timer0_init(void){
      /* Timer0 (8-bit) interrupt frequency:
      * f = _XTAL_FREQ / 4*prescaler*Timer1 resolution
      * f = 20000000 / 4*16*256 = ~1.22kHz */
-    OPTION_REGbits.T0CS = 0;    // use system clock (external 20MHz)
-    OPTION_REGbits.T0SE = 0;    // rising edge
-    OPTION_REGbits.PSA = 0;     // assign the prescaler to Timer0
-    OPTION_REGbits.PS = 0b011;  // prescaler set to 1:16
-    INTCONbits.INTF = 0;        // clear the timer0 interrupt if it exists
-    INTCONbits.GIE = 1;         // enable interrupts globally
-    INTCONbits.PEIE = 1;        // enable peripheral interrupts
-    INTCONbits.T0IE = 1;        // Timer0 overflow interrupt enabled
+    OPTION_REGbits.T0CS = 0;    //use system clock (external 20MHz)
+    OPTION_REGbits.T0SE = 0;    //rising edge
+    OPTION_REGbits.PSA = 0;     //assign the prescaler to Timer0
+    OPTION_REGbits.PS = 0b011;  //prescaler set to 1:16
+    INTCONbits.INTF = 0;        //clear the timer0 interrupt if it exists
+    INTCONbits.GIE = 1;         //enable interrupts globally
+    INTCONbits.PEIE = 1;        //enable peripheral interrupts
+    INTCONbits.T0IE = 1;        //Timer0 overflow interrupt enabled
     
 }
 
@@ -88,14 +92,14 @@ void Timer1_init(void){
     /* Timer1 (16-bit) interrupt frequency:
      * f = _XTAL_FREQ / 4*prescaler*Timer1 resolution
      * f = 20000000 / 4*1*65536 = ~76Hz */
-    T1CONbits.T1CKPS = 0b00;    // Timer 1 prescaler 1:1
-    T1CONbits.TMR1CS = 0;       // use internal clock (Fosc/4)
-    PIR1bits.TMR1IF = 0;        // clear the timer 1 interrupt if it exists
-    INTCONbits.GIE = 1;         // enable interrupts globally
-    INTCONbits.PEIE = 1;        // enables peripheral interrupts
-    PIE1bits.TMR1IE = 1;        // Timer 1 overflow interrupt enabled
+    T1CONbits.T1CKPS = 0b00;    //Timer 1 prescaler 1:1
+    T1CONbits.TMR1CS = 0;       //use internal clock (Fosc/4)
+    PIR1bits.TMR1IF = 0;        //clear the timer 1 interrupt if it exists
+    INTCONbits.GIE = 1;         //enable interrupts globally
+    INTCONbits.PEIE = 1;        //enables peripheral interrupts
+    PIE1bits.TMR1IE = 1;        //Timer 1 overflow interrupt enabled
     
-    T1CONbits.TMR1ON = 1;       // turn on Timer 1
+    T1CONbits.TMR1ON = 1;       //turn on Timer 1
 }
 
 void ADC_Init(void){
@@ -174,8 +178,8 @@ void set_tri_pwm_output(void){
     }
  
     duty_cycle = phase_accum >> 2;
-    CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
-    CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
+    CCP1CONbits.DCB = duty_cycle & 0b11;        //writing the PWM LSBs
+    CCPR1L = (duty_cycle >> 2) & 0b11111111;    //writing the PWM MSBs
     phase_accum += (tri_direction * 2 * speed);
 }
 
@@ -185,16 +189,16 @@ void set_sq_pwm_output(void){
         phase_accum = phase_accum - 4094;
     }
     
-    // set duty cycle
+    // set duty cycle to 50%
     if (phase_accum >= 2048){
-        duty_cycle = 1016;
+        duty_cycle = 1016;      //this is the maximum value of the PWM duty
     }
     else {
         duty_cycle = 0;
     }
     
-    CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
-    CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
+    CCP1CONbits.DCB = duty_cycle & 0b11;        //writing the PWM LSBs
+    CCPR1L = (duty_cycle >> 2) & 0b11111111;    //writing the PWM MSBs
     phase_accum += speed;
 }
 
@@ -202,12 +206,12 @@ void main(void) {
     // IO CONFIG
     TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as input
     ANSEL = 0b00100000;         //set AN5 (pin 9) as analog input (others as digital I/O)
-    //TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as a digital input
     TRISCbits.TRISC2 = 0;       //set RC2 (pin 8) as a digital output
     TRISCbits.TRISC3 = 1;       //set RC3 (pin 7) as a digital input
     TRISCbits.TRISC4 = 1;       //set RC4 (pin 6) as a digital input
     TRISCbits.TRISC5 = 0;       //set RC5 (pin 5) as a digital output (for pwm))
 
+    // Software configuration
     Timer0_init();              //timer0 used to periodically check the digital inputs
     ADC_Init();                 //adc used to read the state of the "speed" pot
     PWM_Init();                 //pwm used to create the LFO
@@ -216,6 +220,9 @@ void main(void) {
     while(1){
         adc_result = ADC_Convert();
         speed = ((adc_result) >> 1) + 1;
+        
+        CLRWDT();               //clear the Watchdog Timer to keep the PIC from
+                                //resetting
     }
     return;
 }
@@ -235,6 +242,6 @@ void interrupt ISR(void){
             set_sq_pwm_output();
         }
         
-        INTCONbits.T0IF = 0;                    // reset timer0 interrupt flag
+        INTCONbits.T0IF = 0;    // reset timer0 interrupt flag
     }
 }
