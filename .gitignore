@@ -1,7 +1,7 @@
-build/
-debug/
-dist/
-nbprojects/private/
+build/*
+debug/*
+dist/*
+nbprojects/private/*
 nbprojects/Makefile-*
 nbprojects/Package-*
 
