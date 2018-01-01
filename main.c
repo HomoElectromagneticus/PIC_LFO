@@ -13,18 +13,17 @@
  * wave choice 2 ---|6       9|--- "speed" pot
  * wave choice 1 ---|7_______8|--- "on" light
  * 
- * This program produces a PWM'd sine wave from the "PWM out" pin at a frequency
+ * This program produces a PWM'd wave from the "PWM out" pin at a frequency
  * controlled by the position of a speed pot whose wiper is connected to pin
- * 11. The speed is controllable between ~0.3Hz and ~38Hz (512 total steps)
+ * 9. The speed is controllable between ~0.3Hz and ~19Hz (256 total steps)
  */
 
-//#include <stdio.h>
 #include <stdlib.h>
 #include <xc.h>
 
 // CONFIG 1
 #pragma config FOSC = HS        //Oscillator Selection bits (HS oscillator: High-speed crystal/resonator on RA4/OSC2/CLKOUT and RA5/OSC1/CLKIN)
-#pragma config WDTE = ON        //Watchdog Timer Enable (WDT disabled)
+#pragma config WDTE = ON        //Watchdog Timer Enable (WDT enabled)
 #pragma config PWRTE = ON       //Power-up Timer Enable (PWRT enabled)
 #pragma config MCLRE = ON       //MCLR Pin Function Select (MCLR/VPP pin function is a reset input)
 #pragma config CP = OFF         //Flash Program Memory Code Protection (Program memory code protection is disabled)
@@ -35,10 +34,10 @@
 
 // CONFIG 2
 #define _XTAL_FREQ 20000000     //setting processor speed variable (20MHz)
-#define WDTPS0 1                //set the Watchdog Timer to reset the PIC after 
-#define WDTPS1 0                //529ms (31KHz / 16384)
+#define WDTPS0 0                //set the Watchdog Timer to reset the PIC after 
+#define WDTPS1 1                //17ms (31KHz / 512)
 #define WDTPS2 0
-#define WDTPS3 1
+#define WDTPS3 0
 
 // global variables
 int post_scale = 0;             //this is used to get the timer2 interrupt speed down
@@ -86,20 +85,6 @@ void Timer0_init(void){
     INTCONbits.PEIE = 1;        //enable peripheral interrupts
     INTCONbits.T0IE = 1;        //Timer0 overflow interrupt enabled
     
-}
-
-void Timer1_init(void){
-    /* Timer1 (16-bit) interrupt frequency:
-     * f = _XTAL_FREQ / 4*prescaler*Timer1 resolution
-     * f = 20000000 / 4*1*65536 = ~76Hz */
-    T1CONbits.T1CKPS = 0b00;    //Timer 1 prescaler 1:1
-    T1CONbits.TMR1CS = 0;       //use internal clock (Fosc/4)
-    PIR1bits.TMR1IF = 0;        //clear the timer 1 interrupt if it exists
-    INTCONbits.GIE = 1;         //enable interrupts globally
-    INTCONbits.PEIE = 1;        //enables peripheral interrupts
-    PIE1bits.TMR1IE = 1;        //Timer 1 overflow interrupt enabled
-    
-    T1CONbits.TMR1ON = 1;       //turn on Timer 1
 }
 
 void ADC_Init(void){
@@ -204,12 +189,13 @@ void set_sq_pwm_output(void){
 
 void main(void) {
     // IO CONFIG
+    TRISCbits.TRISC0 = 1;       //set RC0 (pin 10) as input
     TRISCbits.TRISC1 = 1;       //set RC1 (pin 9) as input
     ANSEL = 0b00100000;         //set AN5 (pin 9) as analog input (others as digital I/O)
-    TRISCbits.TRISC2 = 0;       //set RC2 (pin 8) as a digital output
-    TRISCbits.TRISC3 = 1;       //set RC3 (pin 7) as a digital input
-    TRISCbits.TRISC4 = 1;       //set RC4 (pin 6) as a digital input
-    TRISCbits.TRISC5 = 0;       //set RC5 (pin 5) as a digital output (for pwm))
+    TRISCbits.TRISC2 = 0;       //set RC2 (pin 8) as a  output
+    TRISCbits.TRISC3 = 1;       //set RC3 (pin 7) as a input
+    TRISCbits.TRISC4 = 1;       //set RC4 (pin 6) as a input
+    TRISCbits.TRISC5 = 0;       //set RC5 (pin 5) as a output (for pwm))
 
     // Software configuration
     Timer0_init();              //timer0 used to periodically check the digital inputs
@@ -219,7 +205,7 @@ void main(void) {
     
     while(1){
         adc_result = ADC_Convert();
-        speed = ((adc_result) >> 1) + 1;
+        speed = ((adc_result) >> 2) + 1;
         
         CLRWDT();               //clear the Watchdog Timer to keep the PIC from
                                 //resetting
