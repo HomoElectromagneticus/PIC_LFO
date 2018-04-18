@@ -75,11 +75,11 @@ int adc_result;                 //this is where the ADC value will be stored
 void Timer0_init(void){
      /* Timer0 (8-bit) interrupt frequency:
      * f = _XTAL_FREQ / 4*prescaler*Timer1 resolution
-     * f = 20000000 / 4*16*256 = ~1.22kHz */
+     * f = 20000000 / (4*2*256) = ~9.765kHz */
     OPTION_REGbits.T0CS = 0;    //use system clock (external 20MHz)
     OPTION_REGbits.T0SE = 0;    //rising edge
     OPTION_REGbits.PSA = 0;     //assign the prescaler to Timer0
-    OPTION_REGbits.PS = 0b011;  //prescaler set to 1:16
+    OPTION_REGbits.PS = 0b000;  //prescaler set to 1:2
     INTCONbits.INTF = 0;        //clear the timer0 interrupt if it exists
     INTCONbits.GIE = 1;         //enable interrupts globally
     INTCONbits.PEIE = 1;        //enable peripheral interrupts
@@ -101,7 +101,7 @@ void ADC_Init(void){
 void PWM_Init(void){
     // starts the PWM output
     // PWM period = [PR2 + 1] * 4 * Tosc * (Timer2 prescale value)
-    // PWM frequency = 19.56kHz
+    // PWM frequency = 19.53kHz
     
     TRISCbits.TRISC5 = 1;       //disabling the CCP1 output driver
     PR2 = 0xFF;                 //setting PR2 for max PWM bit depth at 20MHz clock
