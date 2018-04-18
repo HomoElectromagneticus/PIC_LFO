@@ -74,8 +74,8 @@ int adc_result;                 //this is where the ADC value will be stored
 
 void Timer0_init(void){
      /* Timer0 (8-bit) interrupt frequency:
-     * f = _XTAL_FREQ / 4*prescaler*Timer1 resolution
-     * f = 20000000 / (4*2*256) = ~9.765kHz */
+     * f = _XTAL_FREQ / (4*prescaler*Timer1 resolution*2)
+     * f = 20000000 / (4*2*256*2) = ~4.883kHz */
     OPTION_REGbits.T0CS = 0;    //use system clock (external 20MHz)
     OPTION_REGbits.T0SE = 0;    //rising edge
     OPTION_REGbits.PSA = 0;     //assign the prescaler to Timer0
@@ -98,6 +98,21 @@ void ADC_Init(void){
     ADCON0bits.ADON = 1;        //turn ADC on
 }
 
+void Timer2_Init(void){
+    // sets up Timer2 (used for PWM and the interrupt)
+    // Timer2 uses the system clock (Fosc/4) by default
+    // Timer2 overflow interrupt frequency:
+    //      f = _XTAL_FREQ / 4*prescaler*Timer2 resolution
+    //      f = 20000000 / (4*1*256) = 19.53kHz
+    T2CONbits.TMR2ON = 0;       //turn off Timer2 during setup
+    PIR1bits.TMR2IF = 0;        //reset Timer2 overflow interrupt flag
+    T2CONbits.T2CKPS = 0b00;    //set the Timer2 prescaler to 1
+    INTCONbits.GIE = 1;         //enable interrupts globally
+    INTCONbits.PEIE = 1;        //enable peripheral interrupts
+    PIE1bits.T2IE = 1;          //enable Timer2 overflow interrupts      
+    T2CONbits.TMR2ON = 1;       //turn on Timer2
+}
+
 void PWM_Init(void){
     // starts the PWM output
     // PWM period = [PR2 + 1] * 4 * Tosc * (Timer2 prescale value)
@@ -111,12 +126,9 @@ void PWM_Init(void){
     CCP1CONbits.DC1B0 = 0;      //setting the two LSBs of the PWM duty cycle
     CCP1CONbits.DC1B1 = 0;
     CCPR1L = 0b00110000;        //setting the MSBs of the PWM duty cycle
-    // configuring Timer2 since the PWM uses it
-    PIR1bits.TMR2IF = 0;        //reset timer 2 overflow interrupt flag
-    T2CONbits.T2CKPS = 0b00;    //set the timer 2 prescaler to 1
-    T2CONbits.TMR2ON = 1;       //turn on timer 2
+    
     //enable PWM after a new cycle has started
-    while (PIR1bits.TMR2IF == 0);//wait for time 2 to overflow
+    while (PIR1bits.TMR2IF == 0);//wait for timer 2 to overflow
 
     TRISCbits.TRISC5 = 0;       //enable the CCP1 output driver
 }
@@ -198,9 +210,10 @@ void main(void) {
     TRISCbits.TRISC5 = 0;       //set RC5 (pin 5) as a output (for pwm))
 
     // Software configuration
-    Timer0_init();              //timer0 used to periodically check the digital inputs
-    ADC_Init();                 //adc used to read the state of the "speed" pot
-    PWM_Init();                 //pwm used to create the LFO
+    Timer2_Init();              //Timer2 used to periodically update the PWM 
+                                //duty cycle
+    ADC_Init();                 //ADC used to read the state of the "speed" pot
+    PWM_Init();                 //PWM used to create the LFO
     PORTCbits.RC2 = 1;          //just to tell the user that the program started
     
     while(1){
@@ -215,7 +228,7 @@ void main(void) {
 
 void interrupt ISR(void){
     // check for Timer 0 overflow interrupt
-    if(INTCONbits.T0IF == 1){
+    if(PIR1bits.TMR2IF == 1){
 
         // state of pin 6 and 7 controls which output wave is drawn
         if ((PORTCbits.RC3 == 0) && (PORTCbits.RC4 == 0)){
@@ -228,6 +241,6 @@ void interrupt ISR(void){
             set_sq_pwm_output();
         }
         
-        INTCONbits.T0IF = 0;    // reset timer0 interrupt flag
+        PIR1bits.TMR2IF = 0;    // reset timer0 interrupt flag
     }
 }
