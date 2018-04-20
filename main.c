@@ -15,7 +15,7 @@
  * 
  * This program produces a PWM'd wave from the "PWM out" pin at a frequency
  * controlled by the position of a speed pot whose wiper is connected to pin
- * 9. The speed is controllable between ~0.3Hz and ~19Hz (256 total steps)
+ * 9. The speed is controllable between ~0.25Hz and ~16Hz (256 total steps)
  */
 
 #include <stdlib.h>
@@ -40,24 +40,25 @@
 #define WDTPS3 0
 
 // global variables
-int post_scale = 0;             //this is used to get the timer2 interrupt speed down
-const unsigned short sine_LUT[257] = {
-    508,520,533,545,558,570,583,595,607,619,631,643,655,667,679,691,
-    702,714,725,736,747,758,769,780,790,801,811,821,830,840,849,858,
-    867,876,884,893,901,908,916,923,930,937,944,950,956,962,967,972,
-    977,982,986,990,994,998,1001,1004,1006,1009,1011,1012,1014,1015,1015,1016,
-    1016,1016,1015,1015,1014,1012,1011,1009,1006,1004,1001,998,994,990,986,982,
-    977,972,967,962,956,950,944,937,930,923,916,908,901,893,884,876,
-    867,858,849,840,830,821,811,801,790,780,769,758,747,736,725,714,
-    702,691,679,667,655,643,631,619,607,595,583,570,558,545,533,520,
-    508,496,483,471,458,446,433,421,409,397,385,373,361,349,337,325,
-    314,302,291,280,269,258,247,236,226,215,205,195,186,176,167,158,
-    149,140,132,123,115,108,100,93,86,79,72,66,60,54,49,44,
-    39,34,30,26,22,18,15,12,10,7,5,4,2,1,1,0,
-    0,0,1,1,2,4,5,7,10,12,15,18,22,26,30,34,
-    39,44,49,54,60,66,72,79,86,93,100,108,115,123,132,140,
-    149,158,167,176,186,195,205,215,226,236,247,258,269,280,291,302,
-    314,325,337,349,361,373,385,397,409,421,433,446,458,471,483,496,500
+const unsigned short sine_LUT[256] = {
+    508, 511, 514, 517, 520, 524, 527, 530, 533, 536, 539, 542, 545, 548, 552,
+    555, 558, 561, 564, 567, 570, 573, 576, 579, 583, 586, 589, 592, 595, 598,
+    601, 604, 607, 610, 613, 616, 619, 622, 625, 628, 631, 634, 637, 640, 643,
+    646, 649, 652, 655, 658, 661, 664, 667, 670, 673, 676, 679, 682, 685, 688,
+    691, 694, 697, 700, 702, 705, 708, 711, 714, 717, 720, 722, 725, 728, 731,
+    734, 736, 739, 742, 745, 747, 750, 753, 756, 758, 761, 764, 766, 769, 772,
+    774, 777, 780, 782, 785, 788, 790, 793, 795, 798, 801, 803, 806, 808, 811,
+    813, 816, 818, 821, 823, 825, 828, 830, 833, 835, 837, 840, 842, 845, 847,
+    849, 851, 854, 856, 858, 861, 863, 865, 867, 869, 872, 874, 876, 878, 880,
+    882, 884, 886, 889, 891, 893, 895, 897, 899, 901, 903, 905, 907, 908, 910,
+    912, 914, 916, 918, 920, 922, 923, 925, 927, 929, 930, 932, 934, 936, 937,
+    939, 940, 942, 944, 945, 947, 948, 950, 952, 953, 955, 956, 957, 959, 960,
+    962, 963, 965, 966, 967, 969, 970, 971, 972, 974, 975, 976, 977, 979, 980,
+    981, 982, 983, 984, 985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995,
+    996, 997, 998, 998, 999, 1000, 1001, 1002, 1002, 1003, 1004, 1004, 1005,
+    1006, 1006, 1007, 1007, 1008, 1009, 1009, 1010, 1010, 1011, 1011, 1011,
+    1012, 1012, 1013, 1013, 1013, 1014, 1014, 1014, 1014, 1015, 1015, 1015,
+    1015, 1015, 1016, 1016, 1016, 1016, 1016, 1016, 1016,
 };
 int table_index = 0;            //used to get into the LUT
 int interpolation_bits = 0;     //used to decide how much interpolation to do
@@ -67,25 +68,8 @@ int phase_accum = 0;            //phase accumulator for "analog" output.
 unsigned int duty_cycle = 0;    //setting for the PWM output duty cycle
 int speed = 1;                  //"speed" of wavetable scanning
 int interpolated = 0;           //first-order interpolation for sine LUT
-int interpolation_rise = 0;     //difference in wavetable index values: used
-                                //for interpolation
 int tri_direction = 1;          //direction control bit for the triangle wave
 int adc_result;                 //this is where the ADC value will be stored
-
-void Timer0_init(void){
-     /* Timer0 (8-bit) interrupt frequency:
-     * f = _XTAL_FREQ / (4*prescaler*Timer1 resolution*2)
-     * f = 20000000 / (4*2*256*2) = ~4.883kHz */
-    OPTION_REGbits.T0CS = 0;    //use system clock (external 20MHz)
-    OPTION_REGbits.T0SE = 0;    //rising edge
-    OPTION_REGbits.PSA = 0;     //assign the prescaler to Timer0
-    OPTION_REGbits.PS = 0b000;  //prescaler set to 1:2
-    INTCONbits.INTF = 0;        //clear the timer0 interrupt if it exists
-    INTCONbits.GIE = 1;         //enable interrupts globally
-    INTCONbits.PEIE = 1;        //enable peripheral interrupts
-    INTCONbits.T0IE = 1;        //Timer0 overflow interrupt enabled
-    
-}
 
 void ADC_Init(void){
     // sets up the ADC
@@ -139,24 +123,51 @@ int ADC_Convert(void){
     return ADRESH;              //return the ADC value
 }
 
+int get_sine_value_from_pa(int local_pa){
+    // returns the PWM duty cycle value for a sine wave output from the phase
+    // accumulator value
+    
+    local_pa = (local_pa >> 4); //remove the interpolation bits
+
+    if((local_pa >= 0) && (local_pa < 256)){
+        return sine_LUT[local_pa];
+    }
+    else if((local_pa >= 256) && (local_pa < 512)){
+        local_pa = local_pa - 256;
+        return sine_LUT[255 - local_pa];
+    }
+    else if((local_pa >= 512) && (local_pa < 768)){
+        local_pa = local_pa - 512;
+        return (1016 - sine_LUT[local_pa]);
+    }
+    else if((local_pa >= 768) && (local_pa < 1024)){
+        local_pa = local_pa - 768;
+        return (1016 - sine_LUT[255 - local_pa]);
+    }
+    else {
+        return 508;
+    }
+}
+
 void set_sine_pwm_output(void){
     // force the phase accumulator to "overflow"
-    if(phase_accum >= 4094){
-        phase_accum = phase_accum - 4094;
+    if(phase_accum >= 16384){
+        phase_accum = phase_accum - 16384;
     }
         
-    // use bits 3 through 10 of the phase accumulator to find the nearest 
-    // LUT index and bits 1, 2, and 3 for the interpolation step
-    table_index = phase_accum >> 4;
-    interpolation_bits = phase_accum & 0b000000000001111;
+    // use bits 4 through 14 of the phase accumulator to find the nearest 
+    // LUT index and bits 0, 1, 2, and 3 for the interpolation step
+    interpolation_bits = phase_accum & 0b1111;
     
-    // calculate the slope between adjacent values in the LUT in case they
-    // are needed
-    interpolation_rise = sine_LUT[table_index + 1] - sine_LUT[table_index];
+    // calculate the "slope" between adjacent duty cycle values in the LUT in 
+    //case they are needed
+    int point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
+    int point_2 = get_sine_value_from_pa(phase_accum);
+    int interpolation_rise = (point_1 - point_2);
       
     // interpolate (y = mx +b)
-    duty_cycle = ((interpolation_rise / 16) * interpolation_bits) + sine_LUT[table_index];
-     
+    duty_cycle = ((interpolation_rise / 16) * interpolation_bits) + point_2;
+    
     CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
     CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
     phase_accum += speed;                       // increment the PA
@@ -165,8 +176,8 @@ void set_sine_pwm_output(void){
 void set_tri_pwm_output(void){
     // control the wave direction by "turning the phase accumulator around"
     // if it grows too large or too small
-    if (phase_accum > 4080){
-        phase_accum = 4080 - (phase_accum - 4080);
+    if (phase_accum > 16384){
+        phase_accum = 16384 - (phase_accum - 16384);
         tri_direction = -1;
     }
     else if (phase_accum < 0){
@@ -174,20 +185,20 @@ void set_tri_pwm_output(void){
         tri_direction = 1;
     }
  
-    duty_cycle = phase_accum >> 2;
+    duty_cycle = phase_accum >> 4;
     CCP1CONbits.DCB = duty_cycle & 0b11;        //writing the PWM LSBs
     CCPR1L = (duty_cycle >> 2) & 0b11111111;    //writing the PWM MSBs
-    phase_accum += (tri_direction * 2 * speed);
+    phase_accum += (tri_direction * speed);
 }
 
 void set_sq_pwm_output(void){
     // force the phase accumulator to "overflow"
-    if(phase_accum >= 4094){
-        phase_accum = phase_accum - 4094;
+    if(phase_accum >= 16384){
+        phase_accum = phase_accum - 16384;
     }
     
     // set duty cycle to 50%
-    if (phase_accum >= 2048){
+    if (phase_accum >= 8192){
         duty_cycle = 1016;      //this is the maximum value of the PWM duty
     }
     else {
@@ -234,10 +245,10 @@ void interrupt ISR(void){
         if ((PORTCbits.RC3 == 0) && (PORTCbits.RC4 == 0)){
             set_tri_pwm_output();
         }
-        else if((PORTCbits.RC3 == 1) && (PORTCbits.RC4 == 0)){
+        else if ((PORTCbits.RC3 == 1) && (PORTCbits.RC4 == 0)){
             set_sine_pwm_output();
         }
-        else{
+        else {
             set_sq_pwm_output();
         }
         
