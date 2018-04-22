@@ -41,24 +41,24 @@
 
 // global variables
 const unsigned short sine_LUT[256] = {
-    508, 511, 514, 517, 520, 524, 527, 530, 533, 536, 539, 542, 545, 548, 552,
-    555, 558, 561, 564, 567, 570, 573, 576, 579, 583, 586, 589, 592, 595, 598,
-    601, 604, 607, 610, 613, 616, 619, 622, 625, 628, 631, 634, 637, 640, 643,
-    646, 649, 652, 655, 658, 661, 664, 667, 670, 673, 676, 679, 682, 685, 688,
-    691, 694, 697, 700, 702, 705, 708, 711, 714, 717, 720, 722, 725, 728, 731,
-    734, 736, 739, 742, 745, 747, 750, 753, 756, 758, 761, 764, 766, 769, 772,
-    774, 777, 780, 782, 785, 788, 790, 793, 795, 798, 801, 803, 806, 808, 811,
-    813, 816, 818, 821, 823, 825, 828, 830, 833, 835, 837, 840, 842, 845, 847,
-    849, 851, 854, 856, 858, 861, 863, 865, 867, 869, 872, 874, 876, 878, 880,
-    882, 884, 886, 889, 891, 893, 895, 897, 899, 901, 903, 905, 907, 908, 910,
-    912, 914, 916, 918, 920, 922, 923, 925, 927, 929, 930, 932, 934, 936, 937,
-    939, 940, 942, 944, 945, 947, 948, 950, 952, 953, 955, 956, 957, 959, 960,
-    962, 963, 965, 966, 967, 969, 970, 971, 972, 974, 975, 976, 977, 979, 980,
-    981, 982, 983, 984, 985, 986, 987, 988, 989, 990, 991, 992, 993, 994, 995,
-    996, 997, 998, 998, 999, 1000, 1001, 1002, 1002, 1003, 1004, 1004, 1005,
-    1006, 1006, 1007, 1007, 1008, 1009, 1009, 1010, 1010, 1011, 1011, 1011,
-    1012, 1012, 1013, 1013, 1013, 1014, 1014, 1014, 1014, 1015, 1015, 1015,
-    1015, 1015, 1016, 1016, 1016, 1016, 1016, 1016, 1016,
+    508, 514, 520, 527, 533, 539, 545, 552, 558, 564, 570, 576, 583, 589, 595, 
+    601, 607, 613, 619, 625, 631, 637, 643, 649, 655, 661, 667, 673, 679, 685, 
+    691, 697, 702, 708, 714, 720, 725, 731, 736, 742, 747, 753, 758, 764, 769, 
+    774, 780, 785, 790, 795, 801, 806, 811, 816, 821, 825, 830, 835, 840, 845, 
+    849, 854, 858, 863, 867, 872, 876, 880, 884, 889, 893, 897, 901, 905, 908, 
+    912, 916, 920, 923, 927, 930, 934, 937, 940, 944, 947, 950, 953, 956, 959, 
+    962, 965, 967, 970, 972, 975, 977, 980, 982, 984, 986, 988, 990, 992, 994, 
+    996, 998, 999, 1001, 1002, 1004, 1005, 1006, 1007, 1009, 1010, 1011, 1011, 
+    1012, 1013, 1014, 1014, 1015, 1015, 1015, 1016, 1016, 1016, 1016, 1016, 
+    1016, 1016, 1015, 1015, 1015, 1014, 1014, 1013, 1012, 1011, 1011, 1010, 
+    1009, 1007, 1006, 1005, 1004, 1002, 1001, 999, 998, 996, 994, 992, 990, 988, 
+    986, 984, 982, 980, 977, 975, 972, 970, 967, 965, 962, 959, 956, 953, 950, 
+    947, 944, 940, 937, 934, 930, 927, 923, 920, 916, 912, 908, 905, 901, 897, 
+    893, 889, 884, 880, 876, 872, 867, 863, 858, 854, 849, 845, 840, 835, 830, 
+    825, 821, 816, 811, 806, 801, 795, 790, 785, 780, 774, 769, 764, 758, 753, 
+    747, 742, 736, 731, 725, 720, 714, 708, 702, 697, 691, 685, 679, 673, 667, 
+    661, 655, 649, 643, 637, 631, 625, 619, 613, 607, 601, 595, 589, 583, 576, 
+    570, 564, 558, 552, 545, 539, 533, 527, 520, 514 
 };
 int phase_accum = 0;            //phase accumulator for "analog" output.
                                 //bottom three bits are used for interpolation
@@ -135,22 +135,14 @@ int get_sine_value_from_pa(int local_pa){
     // returns the PWM duty cycle value for a sine wave output from the phase
     // accumulator value
     
-    local_pa = (local_pa >> 4); //remove the interpolation bits
+    local_pa = (local_pa >> 5); //remove the interpolation bits
 
-    if((local_pa >= 0) && (local_pa < 256)){
+    if(local_pa < 256){
         return sine_LUT[local_pa];
     }
-    else if((local_pa >= 256) && (local_pa < 512)){
+    else if(local_pa >= 256){
         local_pa = local_pa - 256;
-        return sine_LUT[255 - local_pa];
-    }
-    else if((local_pa >= 512) && (local_pa < 768)){
-        local_pa = local_pa - 512;
         return (1016 - sine_LUT[local_pa]);
-    }
-    else if((local_pa >= 768) && (local_pa < 1024)){
-        local_pa = local_pa - 768;
-        return (1016 - sine_LUT[255 - local_pa]);
     }
     else {
         return 508;
@@ -165,18 +157,16 @@ void set_sine_pwm_output(void){
         
     // use bits 4 through 14 of the phase accumulator to find the nearest 
     // LUT index and bits 0, 1, 2, and 3 for the interpolation step
-    //interpolation_bits = phase_accum & 0b1111;
+    interpolation_bits = phase_accum & 0b1111;
     
     // calculate the "slope" between adjacent duty cycle values in the LUT in 
     //case they are needed
-    //point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
-    //point_2 = get_sine_value_from_pa(phase_accum);
-    //interpolation_rise = (point_1 - point_2);
+    point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
+    point_2 = get_sine_value_from_pa(phase_accum);
+    interpolation_rise = (point_1 - point_2);
       
     // interpolate (y = mx +b)
-    //duty_cycle = ((interpolation_rise >> 4) * interpolation_bits) + point_2;
-    
-    duty_cycle = get_sine_value_from_pa(phase_accum);
+    duty_cycle = ((interpolation_rise >> 4) * interpolation_bits) + point_2;
     
     CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
     CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
