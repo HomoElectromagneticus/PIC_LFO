@@ -60,16 +60,19 @@ const unsigned short sine_LUT[256] = {
     1012, 1012, 1013, 1013, 1013, 1014, 1014, 1014, 1014, 1015, 1015, 1015,
     1015, 1015, 1016, 1016, 1016, 1016, 1016, 1016, 1016,
 };
-int table_index = 0;            //used to get into the LUT
-int interpolation_bits = 0;     //used to decide how much interpolation to do
 int phase_accum = 0;            //phase accumulator for "analog" output.
                                 //bottom three bits are used for interpolation
                                 //on the wavetable(s))
 unsigned int duty_cycle = 0;    //setting for the PWM output duty cycle
 int speed = 1;                  //"speed" of wavetable scanning
-int interpolated = 0;           //first-order interpolation for sine LUT
-int tri_direction = 1;          //direction control bit for the triangle wave
+int speed_bump = 0;
 int adc_result;                 //this is where the ADC value will be stored
+
+// variables just for the sine interpolation step
+int interpolation_bits = 0;
+int point_1 = 0;
+int point_2 = 0;
+int interpolation_rise = 0;
 
 void ADC_Init(void){
     // sets up the ADC
@@ -123,6 +126,11 @@ int ADC_Convert(void){
     return ADRESH;              //return the ADC value
 }
 
+void set_PWM_duty_cycle(int duty){
+    CCP1CONbits.DCB = duty & 0b11;        // writing the PWM LSBs
+    CCPR1L = (duty >> 2) & 0b11111111;    // writing the PWM MSBs
+}
+
 int get_sine_value_from_pa(int local_pa){
     // returns the PWM duty cycle value for a sine wave output from the phase
     // accumulator value
@@ -157,38 +165,51 @@ void set_sine_pwm_output(void){
         
     // use bits 4 through 14 of the phase accumulator to find the nearest 
     // LUT index and bits 0, 1, 2, and 3 for the interpolation step
-    interpolation_bits = phase_accum & 0b1111;
+    //interpolation_bits = phase_accum & 0b1111;
     
     // calculate the "slope" between adjacent duty cycle values in the LUT in 
     //case they are needed
-    int point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
-    int point_2 = get_sine_value_from_pa(phase_accum);
-    int interpolation_rise = (point_1 - point_2);
+    //point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
+    //point_2 = get_sine_value_from_pa(phase_accum);
+    //interpolation_rise = (point_1 - point_2);
       
     // interpolate (y = mx +b)
-    duty_cycle = ((interpolation_rise / 16) * interpolation_bits) + point_2;
+    //duty_cycle = ((interpolation_rise >> 4) * interpolation_bits) + point_2;
+    
+    duty_cycle = get_sine_value_from_pa(phase_accum);
     
     CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
     CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
-    phase_accum += speed;                       // increment the PA
 }
 
 void set_tri_pwm_output(void){
-    // control the wave direction by "turning the phase accumulator around"
-    // if it grows too large or too small
-    if (phase_accum > 16384){
-        phase_accum = 16384 - (phase_accum - 16384);
-        tri_direction = -1;
+    // force the phase accumulator to "overflow"
+    if (phase_accum >= 16384){
+        phase_accum = phase_accum - 16384;
     }
-    else if (phase_accum < 0){
-        phase_accum = -1 * phase_accum;
-        tri_direction = 1;
+
+    int local_pa = phase_accum >> 3;           //no interpolation needed here
+    
+    // set the PWM duty for sine wave output
+    if ((local_pa >= 0) && (local_pa < 512)){
+        duty_cycle = local_pa + 512;
+    }
+    else if((local_pa >= 512) && (local_pa < 1536)){
+        duty_cycle = 1024 - (local_pa - 512);
+    }
+    else if((local_pa >= 1536)){
+        duty_cycle = local_pa - 1536;
+    }
+    else{
+        duty_cycle = 512;
+    }
+    
+    // flatten the top of the wave
+    if (duty_cycle > 1016){
+        duty_cycle = 1016;
     }
  
-    duty_cycle = phase_accum >> 4;
-    CCP1CONbits.DCB = duty_cycle & 0b11;        //writing the PWM LSBs
-    CCPR1L = (duty_cycle >> 2) & 0b11111111;    //writing the PWM MSBs
-    phase_accum += (tri_direction * speed);
+    set_PWM_duty_cycle(duty_cycle);
 }
 
 void set_sq_pwm_output(void){
@@ -205,9 +226,7 @@ void set_sq_pwm_output(void){
         duty_cycle = 0;
     }
     
-    CCP1CONbits.DCB = duty_cycle & 0b11;        //writing the PWM LSBs
-    CCPR1L = (duty_cycle >> 2) & 0b11111111;    //writing the PWM MSBs
-    phase_accum += speed;
+    set_PWM_duty_cycle(duty_cycle);
 }
 
 void main(void) {
@@ -251,7 +270,8 @@ void interrupt ISR(void){
         else {
             set_sq_pwm_output();
         }
+        phase_accum += speed;       // increment the PA
         
-        PIR1bits.TMR2IF = 0;    // reset timer0 interrupt flag
+        PIR1bits.TMR2IF = 0;        // reset timer0 interrupt flag
     }
 }
