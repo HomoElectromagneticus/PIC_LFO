@@ -40,7 +40,7 @@
 #define WDTPS3 0
 
 // global variables
-const unsigned short sine_LUT[256] = {
+const unsigned int sine_LUT[512] = {
     508, 514, 520, 527, 533, 539, 545, 552, 558, 564, 570, 576, 583, 589, 595, 
     601, 607, 613, 619, 625, 631, 637, 643, 649, 655, 661, 667, 673, 679, 685, 
     691, 697, 702, 708, 714, 720, 725, 731, 736, 742, 747, 753, 758, 764, 769, 
@@ -60,19 +60,12 @@ const unsigned short sine_LUT[256] = {
     661, 655, 649, 643, 637, 631, 625, 619, 613, 607, 601, 595, 589, 583, 576, 
     570, 564, 558, 552, 545, 539, 533, 527, 520, 514 
 };
-int phase_accum = 0;            //phase accumulator for "analog" output.
+unsigned int phase_accum = 0;   //phase accumulator for "analog" output.
                                 //bottom three bits are used for interpolation
                                 //on the wavetable(s))
-unsigned int duty_cycle = 0;    //setting for the PWM output duty cycle
-int speed = 1;                  //"speed" of wavetable scanning
-int speed_bump = 0;
-int adc_result;                 //this is where the ADC value will be stored
-
-// variables just for the sine interpolation step
-int interpolation_bits = 0;
-int point_1 = 0;
-int point_2 = 0;
-int interpolation_rise = 0;
+unsigned int duty_cycle = 508;  //setting for the PWM output duty cycle
+unsigned int speed = 1;         //"speed" of wavetable scanning
+unsigned int adc_result;        //this is where the ADC value will be stored
 
 void ADC_Init(void){
     // sets up the ADC
@@ -131,52 +124,25 @@ void set_PWM_duty_cycle(int duty){
     CCPR1L = (duty >> 2) & 0b11111111;    // writing the PWM MSBs
 }
 
-int get_sine_value_from_pa(int local_pa){
-    // returns the PWM duty cycle value for a sine wave output from the phase
-    // accumulator value
+void set_sine_pwm_output(void){
     
-    local_pa = (local_pa >> 5); //remove the interpolation bits
+    int local_pa = (phase_accum >> 5); //remove the lower bits
 
     if(local_pa < 256){
-        return sine_LUT[local_pa];
+        duty_cycle = sine_LUT[local_pa];
     }
     else if(local_pa >= 256){
         local_pa = local_pa - 256;
-        return (1016 - sine_LUT[local_pa]);
+        duty_cycle = (1016 - sine_LUT[local_pa]);
     }
     else {
-        return 508;
+        duty_cycle = 508;
     }
-}
-
-void set_sine_pwm_output(void){
-    // force the phase accumulator to "overflow"
-    if(phase_accum >= 16384){
-        phase_accum = phase_accum - 16384;
-    }
-        
-    // use bits 4 through 14 of the phase accumulator to find the nearest 
-    // LUT index and bits 0, 1, 2, and 3 for the interpolation step
-    interpolation_bits = phase_accum & 0b1111;
     
-    // calculate the "slope" between adjacent duty cycle values in the LUT in 
-    //case they are needed
-    point_1 = get_sine_value_from_pa(phase_accum + (1<<4));
-    point_2 = get_sine_value_from_pa(phase_accum);
-    interpolation_rise = (point_1 - point_2);
-      
-    // interpolate (y = mx +b)
-    duty_cycle = ((interpolation_rise >> 4) * interpolation_bits) + point_2;
-    
-    CCP1CONbits.DCB = duty_cycle & 0b11;        // writing the PWM LSBs
-    CCPR1L = (duty_cycle >> 2) & 0b11111111;    // writing the PWM MSBs
+    set_PWM_duty_cycle(duty_cycle);
 }
 
 void set_tri_pwm_output(void){
-    // force the phase accumulator to "overflow"
-    if (phase_accum >= 16384){
-        phase_accum = phase_accum - 16384;
-    }
 
     int local_pa = phase_accum >> 3;           //no interpolation needed here
     
@@ -203,10 +169,6 @@ void set_tri_pwm_output(void){
 }
 
 void set_sq_pwm_output(void){
-    // force the phase accumulator to "overflow"
-    if(phase_accum >= 16384){
-        phase_accum = phase_accum - 16384;
-    }
     
     // set duty cycle to 50%
     if (phase_accum >= 8192){
@@ -249,6 +211,11 @@ void main(void) {
 void interrupt ISR(void){
     // check for Timer 0 overflow interrupt
     if(PIR1bits.TMR2IF == 1){
+        
+        // force the phase accumulator to "overflow"
+        if(phase_accum >= 16384){
+            phase_accum = phase_accum - 16384;
+        }
 
         // state of pin 6 and 7 controls which output wave is drawn
         if ((PORTCbits.RC3 == 0) && (PORTCbits.RC4 == 0)){
@@ -260,8 +227,8 @@ void interrupt ISR(void){
         else {
             set_sq_pwm_output();
         }
-        phase_accum += speed;       // increment the PA
         
+        phase_accum += speed;       // increment the PA
         PIR1bits.TMR2IF = 0;        // reset timer0 interrupt flag
     }
 }
