@@ -15,10 +15,9 @@
  * 
  * This program produces a PWM'd wave from the "PWM out" pin at a frequency
  * controlled by the position of a speed pot whose wiper is connected to pin
- * 9. The speed is controllable between ~0.25Hz and ~16Hz (256 total steps)
+ * 9. The speed is controllable between ~0.3Hz and ~19Hz (256 total steps)
  */
 
-#include <stdlib.h>
 #include <xc.h>
 
 // CONFIG 1
@@ -61,8 +60,7 @@ const unsigned int sine_LUT[512] = {
     570, 564, 558, 552, 545, 539, 533, 527, 520, 514 
 };
 unsigned int phase_accum = 0;   //phase accumulator for "analog" output.
-                                //bottom three bits are used for interpolation
-                                //on the wavetable(s))
+                                //bottom three bits are mostly skipped
 unsigned int duty_cycle = 508;  //setting for the PWM output duty cycle
 unsigned int speed = 1;         //"speed" of wavetable scanning
 unsigned int adc_result;        //this is where the ADC value will be stored
@@ -120,13 +118,13 @@ int ADC_Convert(void){
 }
 
 void set_PWM_duty_cycle(int duty){
-    CCP1CONbits.DCB = duty & 0b11;        // writing the PWM LSBs
-    CCPR1L = (duty >> 2) & 0b11111111;    // writing the PWM MSBs
+    CCP1CONbits.DCB = duty & 0b11;        //writing the PWM LSBs
+    CCPR1L = (duty >> 2) & 0b11111111;    //writing the PWM MSBs
 }
 
 void set_sine_pwm_output(void){
     
-    int local_pa = (phase_accum >> 5); //remove the lower bits
+    int local_pa = (phase_accum >> 7);    //remove the lower bits
 
     if(local_pa < 256){
         duty_cycle = sine_LUT[local_pa];
@@ -144,7 +142,7 @@ void set_sine_pwm_output(void){
 
 void set_tri_pwm_output(void){
 
-    int local_pa = phase_accum >> 3;           //no interpolation needed here
+    int local_pa = phase_accum >> 5;        //skip most PA steps
     
     // set the PWM duty for sine wave output
     if ((local_pa >= 0) && (local_pa < 512)){
@@ -171,7 +169,7 @@ void set_tri_pwm_output(void){
 void set_sq_pwm_output(void){
     
     // set duty cycle to 50%
-    if (phase_accum >= 8192){
+    if (phase_accum >= 32768){
         duty_cycle = 1016;      //this is the maximum value of the PWM duty
     }
     else {
@@ -213,8 +211,8 @@ void interrupt ISR(void){
     if(PIR1bits.TMR2IF == 1){
         
         // force the phase accumulator to "overflow"
-        if(phase_accum >= 16384){
-            phase_accum = phase_accum - 16384;
+        if(phase_accum >= 65536){
+            phase_accum = phase_accum - 65536;
         }
 
         // state of pin 6 and 7 controls which output wave is drawn
