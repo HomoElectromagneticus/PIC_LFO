@@ -34,9 +34,9 @@
 // CONFIG 2
 #define _XTAL_FREQ 20000000     //setting processor speed variable (20MHz)
 #define WDTPS0 0                //set the Watchdog Timer to reset the PIC after 
-#define WDTPS1 1                //17ms (31KHz / 512)
-#define WDTPS2 0
-#define WDTPS3 0
+#define WDTPS1 1                //132ms (31KHz / 4096)
+#define WDTPS2 1
+#define WDTPS3 1
 
 // global variables
 const unsigned int sine_LUT[512] = {
@@ -59,8 +59,7 @@ const unsigned int sine_LUT[512] = {
     661, 655, 649, 643, 637, 631, 625, 619, 613, 607, 601, 595, 589, 583, 576, 
     570, 564, 558, 552, 545, 539, 533, 527, 520, 514 
 };
-unsigned int phase_accum = 0;   //phase accumulator for "analog" output.
-                                //bottom three bits are mostly skipped
+unsigned int phase_accum = 0;   //phase accumulator for "analog" output
 unsigned int duty_cycle = 508;  //setting for the PWM output duty cycle
 unsigned int speed = 1;         //"speed" of wavetable scanning
 unsigned int adc_result;        //this is where the ADC value will be stored
@@ -82,6 +81,7 @@ void Timer2_Init(void){
     // Timer2 overflow interrupt frequency:
     //      f = _XTAL_FREQ / 4*prescaler*Timer2 resolution
     //      f = 20000000 / (4*1*256) = 19.53kHz
+    
     T2CONbits.TMR2ON = 0;       //turn off Timer2 during setup
     PIR1bits.TMR2IF = 0;        //reset Timer2 overflow interrupt flag
     T2CONbits.T2CKPS = 0b00;    //set the Timer2 prescaler to 1
@@ -126,6 +126,7 @@ void set_sine_pwm_output(void){
     
     int local_pa = (phase_accum >> 7);    //remove the lower bits
 
+    // "reconstructs" the complete sine wave from the half-sine look-up table
     if(local_pa < 256){
         duty_cycle = sine_LUT[local_pa];
     }
