@@ -4,5 +4,4 @@ dist/*
 nbprojects/private/*
 nbprojects/Makefile-*
 nbprojects/Package-*
-
 /nbproject/private/
