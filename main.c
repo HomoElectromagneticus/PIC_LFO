@@ -2,7 +2,6 @@
  * File:   main.c
  * Author: RM Schaub
  *
- * Created on January 15, 2016, 7:44 PM
  *                   PIC16F684
  *                    _______
  *           VDD ---|1      14|--- VSS
@@ -145,7 +144,7 @@ void set_tri_pwm_output(void){
 
     int local_pa = phase_accum >> 5;        //skip most PA steps
     
-    // set the PWM duty for sine wave output
+    // set the PWM duty for triangle wave output
     if ((local_pa >= 0) && (local_pa < 512)){
         duty_cycle = local_pa + 512;
     }
@@ -208,7 +207,7 @@ void main(void) {
 }
 
 void interrupt ISR(void){
-    // check for Timer 0 overflow interrupt
+    // check for Timer 2 overflow interrupt
     if(PIR1bits.TMR2IF == 1){
         
         // force the phase accumulator to "overflow"
